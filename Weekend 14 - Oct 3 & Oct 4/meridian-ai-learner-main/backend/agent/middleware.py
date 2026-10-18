@@ -18,6 +18,7 @@ Custom middleware written here:
   * log_tool_calls           - one structured log line per tool call: name, args, duration, outcome
 """
 import time
+from typing import Any
 
 from langchain.agents.middleware import (
     AgentMiddleware,
@@ -51,7 +52,7 @@ def log_tool_calls(request, handler):
     return result
 
 
-def build_agent_middleware() -> list[AgentMiddleware]:
+def build_agent_middleware() -> list[AgentMiddleware[Any, Any]]:
     """The middleware stack shared by all three specialist agents (order matters)."""
     return [
         # 1. Privacy: purchase requests can contain contact e-mails or card numbers
