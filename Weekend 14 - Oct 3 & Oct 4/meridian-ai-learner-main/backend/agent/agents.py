@@ -6,12 +6,15 @@
           +--> Tax & Treasury agent    --+--> CFO synthesis (one LLM call) --> audit memo
           +--> Financial Control agent --+
 
-Each specialist is a LangChain agent (create_agent) with its own prompt and tools.
-The ProcurementSupervisor runs them one after another and hands their reports to
-the CFO prompt. Note: create_agent is built on LangGraph, but we never write graph code.
+Each specialist is a LangChain v1 agent (create_agent) with its own prompt, tools and
+a shared middleware stack (agent/middleware.py: PII redaction, call limits, retries,
+tool-call logging). The ProcurementSupervisor runs them one after another, always in
+the same order, and hands their reports to the CFO prompt.
+Note: create_agent is built on LangGraph, but we never write graph code.
 """
 from langchain.agents import create_agent
 
+from agent.middleware import build_agent_middleware
 from agent.prompts import (
     CONTROL_AGENT_PROMPT,
     RISK_AGENT_PROMPT,
@@ -26,12 +29,17 @@ from agent.tools import (
     validate_fx_hedge,
 )
 from logger import GLOBAL_LOGGER as log
-from rag.llm import extract_text, get_llm
+from rag.llm import get_llm
 
 
 def create_specialized_agent(tools, system_prompt):
-    """An agent = the LLM + a set of tools + a system prompt; it decides which tools to call."""
-    return create_agent(model=get_llm(), tools=tools, system_prompt=system_prompt)
+    """An agent = the LLM + a set of tools + a system prompt (+ middleware around the loop)."""
+    return create_agent(
+        model=get_llm(),
+        tools=tools,
+        system_prompt=system_prompt,
+        middleware=build_agent_middleware(),
+    )
 
 
 class ProcurementSupervisor:
@@ -51,7 +59,7 @@ class ProcurementSupervisor:
     def _invoke_agent(agent, request: str) -> str:
         """Run one agent and return the text of its final message."""
         result = agent.invoke({"messages": [{"role": "user", "content": request}]})
-        return extract_text(result["messages"][-1].content)
+        return result["messages"][-1].text  # .text joins Gemini's content blocks
 
     def run_audit(self, request: str) -> dict:
         log.info("Starting audit phase", phase="1 - Risk & Compliance")
@@ -73,7 +81,7 @@ class ProcurementSupervisor:
             control_result=control_result,
         )
         log.info("Starting audit phase", phase="4 - CFO Synthesis")
-        cfo_memo = extract_text(self.llm.invoke(synthesis_prompt).content)
+        cfo_memo = self.llm.invoke(synthesis_prompt).text
         log.info("CFO Synthesis complete", memo=cfo_memo)
 
         return {

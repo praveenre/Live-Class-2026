@@ -1,0 +1,57 @@
+git --version
+
+curl -LsSf https://astral.sh/uv/install.sh | sh
+brew install uv
+
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+uv python install 3.12
+
+mkdir meridian-ai
+cd meridian-ai
+uv init --python 3.12
+
+
+
+git clone https://github.com/mayank953/meridian-ai-learner.git ../meridian-reference
+cp ../meridian-reference/requirements.txt .
+cp ../meridian-reference/requirements-dev.txt .
+cp ../meridian-reference/.env.example .
+cp -R ../meridian-reference/sample_docs .
+rm main.py
+
+
+uv add -r requirements.txt
+uv add --dev pytest==8.4.2 httpx==0.28.1
+
+
+
+uv run python -c "import sys, fastapi, langchain; print(sys.version.split()[0], fastapi.__version__, langchain.__version__)"
+
+
+
+
+
+
+
+
+mkdir -p backend/{api,rag,agent,config,logger,exceptions,tests}
+touch backend/{api,rag,agent,config,logger,exceptions}/__init__.py
+
+
+
+
+
+
+
+
+
+cp ../meridian-reference/backend/config/settings.py backend/config/settings.py
+
+
+
+
+
+uv run python -c "from config.settings import settings; 
+from langchain_google_genai import ChatGoogleGenerativeAI as G; 
+print(G(model=settings.llm_model_name, google_api_key=settings.GOOGLE_API_KEY).invoke('Reply with exactly: hello').text)"

@@ -9,7 +9,31 @@ It is built to **learn from**. The company in the examples, *Aldermoor Industrie
 
 > The "checks" in the audit are done by the AI from its general knowledge (only the exchange-rate check uses a live data source). This is a demo of how such a system is built, **not** a real compliance tool.
 
-**Jump to:** [Technologies](#the-technologies-in-plain-words) · [How it fits together](#how-it-fits-together) · [Why many files?](#why-is-the-code-split-into-many-files) · [What is in this repo](#whats-in-this-repo) · [Run it on your computer](#run-it-on-your-computer) · [Why the cloud?](#why-would-you-need-the-cloud) · [Settings](#settings) · [Problems](#common-problems)
+**New here? Read the [Learner Guide](docs/README.md)**: the story, every file explained, exercises and examples.
+
+**Jump to:** [Learn in depth](#learn-in-depth) · [Technologies](#the-technologies-in-plain-words) · [How it fits together](#how-it-fits-together) · [Why many files?](#why-is-the-code-split-into-many-files) · [What is in this repo](#whats-in-this-repo) · [Run it on your computer](#run-it-on-your-computer) · [Why the cloud?](#why-would-you-need-the-cloud) · [Settings](#settings) · [Problems](#common-problems)
+
+---
+
+## Learn in depth
+
+This README is the short version. The [`docs/`](docs/README.md) folder explains everything step by step:
+
+| If you want to… | Read |
+|---|---|
+| Understand the problem the app solves | [The case](docs/01-the-case.md) |
+| See how it all fits together | [The big picture](docs/02-the-big-picture.md) |
+| Learn the basic words (repo, `.env`, API…) | [Basics for newcomers](docs/03-basics-for-newcomers.md) |
+| See every folder and **why the code is split** | [Project tour](docs/04-project-tour.md) |
+| Understand every file | [Backend](docs/05-backend-files.md) · [Frontend](docs/06-frontend-files.md) · [Root files](docs/07-root-and-config-files.md) |
+| Follow a request from button to answer | [Follow a request](docs/08-follow-a-request.md) |
+| Learn FastAPI, settings and logging, RAG, agents | [09](docs/09-fastapi-explained.md) · [10](docs/10-settings-and-logging.md) · [11](docs/11-rag-explained.md) · [12](docs/12-agents-explained.md) |
+| See how it is packed and set up in the cloud | [Docker](docs/13-docker-and-cloud-run.md) · [GitHub Actions](docs/14-provisioning-and-github-actions.md) |
+| Check what you need, and the **$300 free credit** | [Requirements and costs](docs/15-requirements-accounts-costs.md) |
+| Practise | [Exercises](docs/16-exercises.md) · [runnable examples](docs/examples/README.md) |
+| Fix an error | [Troubleshooting](docs/18-troubleshooting.md) |
+
+> **Is Terraform used?** No. The cloud is set up by GitHub Actions running `gcloud` commands (see [docs/14](docs/14-provisioning-and-github-actions.md)).
 
 ---
 
@@ -26,8 +50,10 @@ Think of a **restaurant**. Each technology plays one part.
 | **Gemini** (Google's AI model) | Reads text and writes answers | The **chef** |
 | **Embeddings** | Turn text into a list of numbers that capture its *meaning* | GPS coordinates for ideas: similar ideas get nearby coordinates |
 | **Vertex AI Vector Search** | A database that finds the stored text closest in meaning to your question | A library catalogue organised by *meaning*, not by title |
+| **Chroma** | The same kind of database, but a folder on your laptop (used when `APP_MODE=local`) | A home bookshelf with the same catalogue system |
 | **RAG** (Retrieval-Augmented Generation) | Find the right pages first, then answer from them | An **open-book exam**: the chef checks the cookbook before answering |
 | **Agents and tools** | AI that can decide to run small programs (tools) to get facts | A chef who can use a scale, a thermometer and a timer |
+| **Middleware** (LangChain v1) | Checks that wrap every agent step: hide e-mails, stop loops, retry errors, log tool calls | The kitchen's head of hygiene and safety, watching every step |
 | **Cloud Storage** | Keeps files in Google Cloud | A filing cabinet |
 | **Docker** | Packs the app and everything it needs into one box | A lunchbox: opens the same anywhere |
 | **Cloud Run** | Runs that box on the internet, only when someone visits | A pop-up shop that opens only when customers arrive |
@@ -121,6 +147,7 @@ frontend/                     The web page (React + TypeScript)
 └── src/lib/api.ts            The only file that talks to the backend
 
 sample_docs/                  Four made-up PDFs to try the app with
+docs/                         The learner guide (19 pages) and docs/examples/ (6 small programs)
 .github/workflows/deploy.yml  Robot that sets up the cloud and deploys the app
 Dockerfile                    Recipe to pack the app into one box
 requirements.txt              Python packages (exact versions)
@@ -143,10 +170,25 @@ api  →  rag, agent  →  config, logger
 | For | You need |
 |---|---|
 | Everything | **Python 3.12**, **Git**. For the web page also **Node.js 20+** |
-| The audit feature | A free **Gemini API key** from https://aistudio.google.com/apikey |
-| Document Q&A | A **Google Cloud** project (see [DEPLOY.md](DEPLOY.md)) |
+| Local mode (audit **and** document Q&A) | Only a free **Gemini API key** from https://aistudio.google.com/apikey |
+| Cloud mode | A **Google Cloud** project (see [DEPLOY.md](DEPLOY.md)) |
 
-### Quick start: the audit (about 10 minutes, no Google Cloud)
+### Local or cloud? One switch
+
+`APP_MODE` in `.env` decides where the app keeps its data. Nothing else in the code changes.
+
+| | `APP_MODE=local` (default) | `APP_MODE=cloud` |
+|---|---|---|
+| Chat model | Gemini API (API key) | Gemini API (key from Secret Manager) |
+| Embeddings | `gemini-embedding-001` via Gemini API | `text-embedding-005` via Vertex AI |
+| Vector database | **Chroma**, a folder on your disk (`.meridian/chroma`) | **Vertex AI Vector Search** |
+| Uploaded PDFs | `.meridian/uploads/` | Cloud Storage bucket |
+| Logs | `logs/` folder | `logs/` + copied to the bucket on shutdown |
+| Google Cloud project needed? | **No** | Yes |
+
+The System Status tab (and `GET /api/status`) shows which mode is running.
+
+### Quick start: everything locally (about 10 minutes, no Google Cloud)
 
 ```bash
 # 1. Get the code (or download the ZIP from GitHub and unzip it)
@@ -160,7 +202,7 @@ pip install -r requirements-dev.txt
 
 # 3. Create your settings file and add your Gemini key
 cp .env.example .env                 # Windows: copy .env.example .env
-#    open .env and set:  GOOGLE_API_KEY=your-key
+#    open .env and set:  GOOGLE_API_KEY=your-key   (leave APP_MODE=local)
 
 # 4. Start the backend
 uvicorn api.main:app --app-dir backend --reload --port 8080
@@ -192,7 +234,7 @@ Open **http://localhost:3000**.
 
 ### Try document Q&A
 
-This needs the cloud setup in [DEPLOY.md](DEPLOY.md). Once your `.env` has the Google Cloud values:
+Works in local mode with just your Gemini key (in cloud mode, see [DEPLOY.md](DEPLOY.md)):
 
 1. Upload the PDFs in `sample_docs/` (Index Documents tab, or `POST /api/rag/upload`).
 2. Ask: *"What is Aldermoor Industries total revenue in FY2024?"* → about **EUR 2.84 billion**.
@@ -205,26 +247,29 @@ This needs the cloud setup in [DEPLOY.md](DEPLOY.md). Once your `.env` has the G
 pytest backend/tests
 ```
 
-Expected: `9 passed`. These tests need no accounts and no internet.
+Expected: `17 passed`. These tests need no accounts and no internet: they include a full
+local run (PDF → Chroma → answer) and an agent run through the middleware, with fake AI models.
 
 ### Run it in Docker (optional)
 
 ```bash
 docker build -t meridian-ai .
-docker run -p 8080:8080 --env-file .env meridian-ai
+docker run -p 8080:8080 --env-file .env -v "$(pwd)/.meridian:/app/.meridian" meridian-ai
 ```
 
-Then open http://localhost:8080. (The box does not contain your `.env`, so you pass it in. For document Q&A you must also give it Google Cloud credentials; see [DEPLOY.md](DEPLOY.md).)
+Then open http://localhost:8080. The box does not contain your `.env`, so you pass it in. The `-v` part keeps
+your local vector database and uploads on your disk, so they survive restarting the container.
 
 ---
 
 ## Why would you need the cloud?
 
-You do **not** need it for the audit. You do for these reasons:
+You do **not** need it to learn or to run every feature: local mode does it all on your laptop.
+You do need it for these reasons:
 
 | Reason | Explanation |
 |---|---|
-| **Document Q&A needs a vector database** | This app stores document meaning in **Google's Vertex AI Vector Search**, which exists only in Google Cloud. There is no local copy. |
+| **A managed vector database** | Chroma on your disk is perfect for one person. **Vertex AI Vector Search** is shared, backed up and scales to millions of chunks. |
 | **Sharing** | On your laptop, only you can open `localhost`. In the cloud, anyone with the link can. |
 | **Always on** | Your laptop sleeps and goes offline. A cloud service keeps running. |
 | **Automatic delivery** | Each time you save changes, a robot can rebuild and publish the app. |
@@ -240,17 +285,21 @@ Settings live in `.env` (copy `.env.example`). `.env` is never uploaded to Git.
 
 | Setting | Meaning | Needed for |
 |---|---|---|
-| `GOOGLE_API_KEY` | Your Gemini key | Everything with AI |
-| `GCP_PROJECT_ID` | Your Google Cloud project | Document Q&A |
-| `GCP_REGION` | Where it runs, e.g. `us-central1` | Document Q&A |
-| `GCS_BUCKET_NAME` | Cloud Storage bucket name | Document Q&A |
-| `GCS_PREFIX` | Folder for uploads, `uploads/` | Document Q&A |
-| `VECTOR_SEARCH_INDEX_ID` | ID of your vector index | Document Q&A |
-| `VECTOR_SEARCH_INDEX_ENDPOINT_ID` | ID of its endpoint | Document Q&A |
-| `GCP_SERVICE_ACCOUNT_PATH` | Path to your key file (optional) | Document Q&A on your computer |
+| `APP_MODE` | `local` (default) or `cloud` | Always |
+| `GOOGLE_API_KEY` | Your Gemini key | Both modes |
 | `VERTEX_LLM_MODEL_NAME` | Chat model, default `gemini-3.8-flash` | Optional |
-| `VERTEX_EMBEDDING_MODEL_NAME` | Embedding model, default `text-embedding-005` | Optional |
 | `LLM_TEMPERATURE` | `0` = most repeatable answers | Optional |
+| `LOCAL_EMBEDDING_MODEL_NAME` | Default `gemini-embedding-001` | Optional, local |
+| `LOCAL_DATA_DIR` | Where Chroma and uploads live, default `.meridian/` | Optional, local |
+| `AGENT_MAX_MODEL_CALLS` / `AGENT_MAX_TOOL_CALLS` / `AGENT_MAX_RETRIES` | Middleware limits, defaults 8 / 6 / 2 | Optional |
+| `GCP_PROJECT_ID` | Your Google Cloud project | Cloud |
+| `GCP_REGION` | Where it runs, e.g. `us-central1` | Cloud |
+| `GCS_BUCKET_NAME` | Cloud Storage bucket name | Cloud |
+| `GCS_PREFIX` | Folder for uploads, `uploads/` | Cloud |
+| `VECTOR_SEARCH_INDEX_ID` | ID of your vector index | Cloud |
+| `VECTOR_SEARCH_INDEX_ENDPOINT_ID` | ID of its endpoint | Cloud |
+| `GCP_SERVICE_ACCOUNT_PATH` | Path to your key file | Cloud mode run from a laptop |
+| `VERTEX_EMBEDDING_MODEL_NAME` | Embedding model, default `text-embedding-005` | Optional, cloud |
 
 > AI model names are retired from time to time. If you see "model not found", look up a current name at https://ai.google.dev/gemini-api/docs/models and set `VERTEX_LLM_MODEL_NAME`.
 
@@ -263,7 +312,9 @@ Settings live in `.env` (copy `.env.example`). `.env` is never uploaded to Git.
 | `ModuleNotFoundError: No module named 'api'` | Run from the main folder and keep `--app-dir backend` |
 | Settings seem empty | Run from the main folder (where `.env` is) |
 | `ModuleNotFoundError` for other packages | Activate the environment (`source .venv/bin/activate`) and run `pip install -r requirements.txt` |
-| `index_id is required` | Set `VECTOR_SEARCH_INDEX_ID` and `VECTOR_SEARCH_INDEX_ENDPOINT_ID` |
+| `503` with "APP_MODE=cloud but these settings are empty" | Fill in the listed settings, or set `APP_MODE=local` |
+| `503` with "GOOGLE_API_KEY is empty" | Add your Gemini key to `.env` and restart |
+| Old answers after changing documents | Local mode: delete the `.meridian/` folder and upload again |
 | `403` from Google Cloud | Your login or key lacks permission, or the wrong account is used; see [DEPLOY.md](DEPLOY.md) |
 | "model not found" | Change `VERTEX_LLM_MODEL_NAME` to a current model |
 | Port already in use | Stop the other program, or use `--port 8081` |

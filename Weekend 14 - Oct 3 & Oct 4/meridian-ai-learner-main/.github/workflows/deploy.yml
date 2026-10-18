@@ -232,7 +232,7 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --max-instances 3 \
-            --set-env-vars="ENVIRONMENT=production,GCP_PROJECT_ID=${{ env.PROJECT_ID }},GCP_REGION=${{ env.REGION }},GCS_BUCKET_NAME=${{ env.PROJECT_ID }}-vector-staging,GCS_PREFIX=uploads/,VERTEX_LLM_MODEL_NAME=gemini-3.8-flash,VERTEX_EMBEDDING_MODEL_NAME=text-embedding-005,VECTOR_SEARCH_INDEX_ID=${{ env.INDEX_ID }},VECTOR_SEARCH_INDEX_ENDPOINT_ID=${{ env.ENDPOINT_ID }}" \
+            --set-env-vars="APP_MODE=cloud,ENVIRONMENT=production,GCP_PROJECT_ID=${{ env.PROJECT_ID }},GCP_REGION=${{ env.REGION }},GCS_BUCKET_NAME=${{ env.PROJECT_ID }}-vector-staging,GCS_PREFIX=uploads/,VERTEX_LLM_MODEL_NAME=gemini-3.8-flash,VERTEX_EMBEDDING_MODEL_NAME=text-embedding-005,VECTOR_SEARCH_INDEX_ID=${{ env.INDEX_ID }},VECTOR_SEARCH_INDEX_ENDPOINT_ID=${{ env.ENDPOINT_ID }}" \
             --update-secrets="GOOGLE_API_KEY=GOOGLE_API_KEY:latest"
 
       - name: Allow Public Access to Cloud Run

@@ -97,6 +97,7 @@ export default function SystemStatusTab() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <StatusSection title="Backend" icon="⚙️">
+          <StatusRow label="Mode (APP_MODE)" value={s.mode} tag={s.mode === "cloud" ? "info" : "ok"} />
           <StatusRow label="Status" value={s.backend?.status} tag="ok" />
           <StatusRow label="Uptime" value={s.backend?.uptime} mono />
           <StatusRow label="Python" value={s.backend?.python_version} mono />
@@ -108,13 +109,14 @@ export default function SystemStatusTab() {
           <StatusRow label="Region" value={s.gcp?.region} mono />
         </StatusSection>
 
-        <StatusSection title="Cloud Storage (GCS)" icon="🗂️">
+        <StatusSection title={s.mode === "cloud" ? "Cloud Storage (GCS)" : "Document Store (local)"} icon="🗂️">
+          <StatusRow label="Location" value={s.storage?.location} mono />
           <StatusRow label="Bucket" value={s.storage?.gcs_bucket} mono />
           <StatusRow label="Prefix" value={s.storage?.gcs_prefix} mono />
         </StatusSection>
 
-        <StatusSection title="Vertex AI Vector Search" icon="🔍">
-          <StatusRow label="Index ID" value={shortId(s.vector_search?.index_id)} mono />
+        <StatusSection title={s.vector_search?.backend ?? "Vector Store"} icon="🔍">
+          <StatusRow label={s.mode === "cloud" ? "Index ID" : "Path"} value={s.mode === "cloud" ? shortId(s.vector_search?.index_id) : s.vector_search?.index_id} mono />
           <StatusRow label="Endpoint ID" value={shortId(s.vector_search?.endpoint_id)} mono />
           <StatusRow label="Stream Update" value={s.vector_search?.stream_update ? "Enabled" : "Disabled"} tag={s.vector_search?.stream_update ? "ok" : "warn"} />
         </StatusSection>

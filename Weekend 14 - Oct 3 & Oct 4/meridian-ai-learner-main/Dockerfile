@@ -38,6 +38,6 @@ COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 EXPOSE 8080
 
 # Start the application using Uvicorn
-# Use shell form to allow environment variable expansion for PORT
-CMD uvicorn api.main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8080}
+# JSON form + "sh -c" keeps ${PORT} expansion; "exec" makes uvicorn PID 1 so it receives SIGTERM
+CMD ["sh", "-c", "exec uvicorn api.main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8080}"]
 

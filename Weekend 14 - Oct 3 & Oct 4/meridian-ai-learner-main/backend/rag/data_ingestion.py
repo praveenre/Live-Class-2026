@@ -1,22 +1,21 @@
 """Getting documents INTO the vector database.
 
-    PDF file -> pages -> chunks (~1000 characters) -> embeddings -> Vector Search
+    PDF file -> pages -> chunks (~1000 characters) -> embeddings -> vector store
 
 Two entry points share the same steps:
-  * ingest_pdf()           - one local PDF (used by the upload endpoint)
-  * ingest_data_from_gcs() - every PDF under the configured GCS bucket/prefix
+  * ingest_pdf()          - one PDF on disk (used by the upload endpoint)
+  * ingest_stored_pdfs()  - every PDF in the document store
+                            (local: .meridian/uploads/, cloud: the GCS bucket)
 """
-import os
-import shutil
-import tempfile
+import hashlib
 
-from google.cloud import storage
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from config.settings import settings
+from exceptions import IngestionError
 from logger import GLOBAL_LOGGER as log
+from rag import document_store
 from rag.vector_store import get_vector_store
 
 CHUNK_SIZE = 1000
@@ -28,46 +27,47 @@ def split_into_chunks(pages: list[Document]) -> list[Document]:
     return splitter.split_documents(pages)
 
 
+def _chunk_id(chunk: Document, position: int) -> str:
+    """Stable ID per chunk: re-indexing the same file overwrites instead of duplicating."""
+    key = f"{chunk.metadata.get('source')}|{chunk.metadata.get('page')}|{position}"
+    return hashlib.sha1(key.encode()).hexdigest()
+
+
 def ingest_pdf(local_path: str, source: str) -> dict:
     """Load one PDF, chunk it and store it. Returns {"pages": n, "chunks": n}.
 
     `source` is saved in each chunk's metadata so answers can be traced back to a file.
     """
-    pages = PyPDFLoader(local_path).load()
+    try:
+        pages = PyPDFLoader(local_path).load()
+    except Exception as exc:  # pypdf raises many different error types
+        raise IngestionError(f"Could not read PDF '{source}': {exc}") from exc
+
     for page in pages:
         page.metadata["source"] = source
 
     chunks = split_into_chunks(pages)
     if chunks:
-        log.info("Embedding chunks and pushing to Vector Search", source=source, chunks=len(chunks))
-        get_vector_store().add_documents(chunks)
+        log.info("Embedding chunks and adding to vector store", source=source, chunks=len(chunks))
+        ids = [_chunk_id(c, i) for i, c in enumerate(chunks)]
+        get_vector_store().add_documents(chunks, ids=ids)
     return {"pages": len(pages), "chunks": len(chunks)}
 
 
-def ingest_data_from_gcs() -> dict:
-    """Ingest every PDF found in the GCS bucket under settings.GCS_PREFIX."""
-    log.info("Connecting to GCS bucket", bucket=settings.GCS_BUCKET_NAME)
-
-    client = storage.Client(project=settings.GCP_PROJECT)
-    blobs = client.bucket(settings.GCS_BUCKET_NAME).list_blobs(prefix=settings.GCS_PREFIX)
-
+def ingest_stored_pdfs() -> dict:
+    """Index every PDF already in the document store."""
+    log.info("Indexing stored documents", location=document_store.location())
     totals = {"files": 0, "pages": 0, "chunks": 0}
-    tmp_dir = tempfile.mkdtemp()
-    try:
-        for blob in blobs:
-            if not blob.name.lower().endswith(".pdf"):
-                continue
-            local_path = os.path.join(tmp_dir, os.path.basename(blob.name))
-            blob.download_to_filename(local_path)
-            result = ingest_pdf(local_path, source=f"gs://{settings.GCS_BUCKET_NAME}/{blob.name}")
-            log.info("Ingested PDF from GCS", blob=blob.name, **result)
+
+    with document_store.pdfs() as files:
+        for local_path, source in files:
+            result = ingest_pdf(local_path, source=source)
+            log.info("Ingested stored PDF", source=source, **result)
             totals["files"] += 1
             totals["pages"] += result["pages"]
             totals["chunks"] += result["chunks"]
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
 
     if totals["files"] == 0:
-        log.warning("No PDF documents found in the specified bucket/prefix")
+        log.warning("No PDF documents found in the document store", location=document_store.location())
     log.info("Ingestion complete", **totals)
     return totals

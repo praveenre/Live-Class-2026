@@ -186,6 +186,7 @@ def validate_fx_hedge(currency_pair: str, rate_used: float) -> str:
         base, quote = parts[0], parts[1]
 
     market_rate = None
+    source = "live market"
 
     # --- Attempt 1: Live rate from Frankfurter API ---
     if base and quote:
@@ -203,6 +204,7 @@ def validate_fx_hedge(currency_pair: str, rate_used: float) -> str:
         prompt = f"""What is the approximate current exchange rate for {currency_pair.replace('_', '/')}?
 Respond with ONLY a single number (the rate). For example, if 1 EUR = 91.5 INR, respond: 91.5"""
         llm_result = _ask_llm(prompt)
+        source = "LLM-estimated"  # the live API failed, so say so in the result
         try:
             market_rate = float(llm_result.strip())
         except ValueError:
@@ -210,7 +212,6 @@ Respond with ONLY a single number (the rate). For example, if 1 EUR = 91.5 INR, 
 
     # --- Calculate variance ---
     variance = abs(rate_used - market_rate) / market_rate
-    source = "live market" if base and quote else "estimated"
 
     if variance > 0.05:
         return (

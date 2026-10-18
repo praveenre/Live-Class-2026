@@ -41,8 +41,9 @@ export async function askQuestion(query: string, retrieverType: string = "simila
   });
 }
 
-export async function triggerGcsIngestion() {
-  return request<{ status: string }>("/api/rag/ingest-gcs", { method: "POST" });
+/** Index every PDF in the document store: local folder (APP_MODE=local) or GCS bucket (APP_MODE=cloud). */
+export async function triggerStoreIngestion() {
+  return request<{ status: string; files: number; pages: number; chunks: number }>("/api/rag/ingest", { method: "POST" });
 }
 
 // ─── Agent ───────────────────────────────────────────────────
@@ -66,11 +67,14 @@ export async function healthCheck() {
   return request("/api/health");
 }
 
+export type AppMode = "local" | "cloud";
+
 export interface SystemStatus {
+  mode?: AppMode;
   backend?: { status: string; uptime: string; python_version: string; platform: string };
   gcp?: { project_id: string; region: string };
-  storage?: { gcs_bucket: string; gcs_prefix: string };
-  vector_search?: { index_id: string; endpoint_id: string; stream_update: boolean };
+  storage?: { location: string; gcs_bucket: string; gcs_prefix: string };
+  vector_search?: { backend: string; index_id: string; endpoint_id: string; stream_update: boolean };
   models?: { embedding: string; llm: string; llm_framework: string };
   ingestion?: { uploads_this_session: number };
 }

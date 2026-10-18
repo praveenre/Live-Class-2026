@@ -9,13 +9,14 @@ client = TestClient(app)
 
 
 def test_health():
-    assert client.get("/api/health").json() == {"status": "ok"}
+    assert client.get("/api/health").json() == {"status": "ok", "mode": "local"}
 
 
-def test_status_shows_config_without_calling_gcp():
+def test_status_reports_local_mode_without_calling_gcp():
     body = client.get("/api/status").json()
-    assert body["gcp"]["project_id"] == "test-project"
-    assert body["models"]["embedding"] == "text-embedding-005"
+    assert body["mode"] == "local"
+    assert body["vector_search"]["backend"] == "Chroma (local disk)"
+    assert body["models"]["embedding"] == "gemini-embedding-001"
 
 
 def test_unknown_api_route_is_404():

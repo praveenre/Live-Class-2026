@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   Upload,
   FileText,
@@ -13,7 +13,7 @@ import {
   Trash2,
   Database,
 } from "lucide-react";
-import { uploadDocument, triggerGcsIngestion } from "@/lib/api";
+import { uploadDocument, triggerStoreIngestion, getSystemStatus, type SystemStatus } from "@/lib/api";
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return bytes + " B";
@@ -42,6 +42,12 @@ export default function DocumentUploadTab() {
   const [gcsLoading, setGcsLoading] = useState(false);
   const [gcsResult, setGcsResult] = useState<{ ok: boolean; message: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // APP_MODE comes from the backend: decides whether "stored documents" means a local folder or GCS
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+  useEffect(() => {
+    getSystemStatus().then(setStatus).catch(() => setStatus(null));
+  }, []);
+  const isCloud = status?.mode === "cloud";
 
   const isAnyUploading = stagedFiles.some((f) => f.status.state === "uploading");
   const hasIdle = stagedFiles.some((f) => f.status.state === "idle");
@@ -110,7 +116,7 @@ export default function DocumentUploadTab() {
     setGcsLoading(true);
     setGcsResult(null);
     try {
-      const data = await triggerGcsIngestion();
+      const data = await triggerStoreIngestion();
       setGcsResult({ ok: true, message: data.status });
     } catch (err: any) {
       setGcsResult({ ok: false, message: err.message });
@@ -151,7 +157,7 @@ export default function DocumentUploadTab() {
             }`}
           >
             <Database className="w-4 h-4" />
-            Cloud Storage
+            {isCloud ? "Cloud Storage" : "Stored Documents"}
           </button>
         </div>
       </div>
@@ -301,10 +307,13 @@ export default function DocumentUploadTab() {
                     <Database className="w-7 h-7 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold font-heading text-card-foreground">Cloud Sync</h3>
+                    <h3 className="text-xl font-bold font-heading text-card-foreground">
+                      {isCloud ? "Cloud Sync" : "Local Sync"}
+                    </h3>
                     <p className="text-sm text-muted-foreground mt-1 max-w-lg">
-                      Synchronize the vector index with documents already in the GCS bucket.
-                      Re-scans the bucket and indexes any new procurement documents.
+                      {isCloud
+                        ? "Synchronize the vector index with documents already in the GCS bucket."
+                        : "Re-index every PDF already saved in the local uploads folder."}
                     </p>
                   </div>
                 </div>
@@ -312,15 +321,17 @@ export default function DocumentUploadTab() {
                 <div className="p-6 rounded-xl bg-muted/40 border border-border/50 mb-8 divide-y divide-border/50">
                   <div className="pb-4">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Target Directory</p>
-                    <p className="text-sm font-mono text-card-foreground">gs://meridian-ai-platform-vector-staging/uploads/</p>
+                    <p className="text-sm font-mono text-card-foreground break-all">{status?.storage?.location ?? "—"}</p>
                   </div>
                   <div className="pt-4 pb-4">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Processing Mode</p>
-                    <p className="text-sm font-medium text-card-foreground">Delta Sync (Stream Update: Enabled)</p>
+                    <p className="text-sm font-medium text-card-foreground">
+                      {status?.vector_search?.backend ?? "—"} · mode: {status?.mode ?? "—"}
+                    </p>
                   </div>
                   <div className="pt-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Estimated Capacity</p>
-                    <p className="text-sm font-medium text-card-foreground">Up to 10k documents / shard</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Embedding Model</p>
+                    <p className="text-sm font-mono text-card-foreground">{status?.models?.embedding ?? "—"}</p>
                   </div>
                 </div>
 
@@ -335,7 +346,7 @@ export default function DocumentUploadTab() {
                   {gcsLoading ? (
                     <><Loader2 className="w-5 h-5 animate-spin" /> Synchronizing Repository…</>
                   ) : (
-                    <><HardDrive className="w-5 h-5" /> Start Global GCS Ingestion</>
+                    <><HardDrive className="w-5 h-5" /> {isCloud ? "Start GCS Ingestion" : "Index Stored Documents"}</>
                   )}
                 </button>
 

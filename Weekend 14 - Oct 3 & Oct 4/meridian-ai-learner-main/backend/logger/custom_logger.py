@@ -3,7 +3,7 @@ import atexit
 import logging
 from datetime import datetime
 import structlog
-from google.cloud import storage
+
 from config.settings import settings
 
 def add_severity(logger, method_name, event_dict):
@@ -59,6 +59,7 @@ class CustomLogger:
                 structlog.processors.TimeStamper(fmt="iso", utc=True, key="timestamp"),
                 structlog.processors.add_log_level,
                 add_severity,
+                structlog.processors.format_exc_info,  # log.exception(...) -> readable traceback field
                 structlog.processors.EventRenamer(to="event"),
                 structlog.processors.JSONRenderer()
             ],
@@ -69,18 +70,16 @@ class CustomLogger:
         return structlog.get_logger(logger_name)
 
     def flush_to_gcs(self):
-        """Upload the current log file to GCS. Safe to call multiple times."""
+        """Cloud mode only: upload the current log file to GCS. Safe to call multiple times."""
         if self._gcs_flushed:
             return
 
-        try:
-            
-            gcs_bucket = settings.GCS_BUCKET_NAME
-            gcp_project = settings.GCP_PROJECT
-        except Exception:
-            # Fallback for environments lacking the settings module
-            gcs_bucket = os.environ.get("GCS_BUCKET_NAME", "")
-            gcp_project = os.environ.get("GCP_PROJECT_ID", "")
+        # Local mode: the log file in ./logs is enough, never touch Google Cloud
+        if not settings.is_cloud:
+            return
+
+        gcs_bucket = settings.GCS_BUCKET_NAME
+        gcp_project = settings.GCP_PROJECT
 
         if not gcs_bucket:
             print("[Logger] GCS_BUCKET_NAME not set — skipping GCS log upload.")
@@ -91,6 +90,8 @@ class CustomLogger:
             return
 
         try:
+            from google.cloud import storage  # only needed (and imported) in cloud mode
+
             client = storage.Client(project=gcp_project or None)
             bucket = client.bucket(gcs_bucket)
             gcs_path = f"logs/{self._timestamp}.log"
