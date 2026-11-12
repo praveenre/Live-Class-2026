@@ -72,7 +72,7 @@ Pushes to other branches do **not** deploy. Experiment on a branch.
 | 5 | Buckets | Create the bucket if missing |
 | 6 | Starter file | Run `generate_json.py` and copy the one dummy vector to the bucket |
 | 7 | Vector Search | Create the index, the endpoint, deploy the index, remove the dummy item. **30–45 minutes the first time** |
-| 8 | Secrets | Store your Gemini key in Secret Manager; allow the app to read that one secret |
+| 8 | Secrets | Store your Gemini key in Secret Manager; allow the app to read secrets (project-wide) |
 | 9 | Build | `gcloud builds submit` builds and stores the image |
 | 10 | Deploy | `gcloud run deploy` with settings, the secret and `--max-instances 3` |
 | 11 | Public access | Let anyone open the address; print the access rules |

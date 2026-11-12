@@ -1,0 +1,11 @@
+git clone https://github.com/mayank953/meridian-ai-learner.git && cd meridian-ai-learner
+cp .env.example .env     # then add your GOOGLE_API_KEY, no quote marks
+docker build -t meridian-ai .
+docker images meridian-ai
+
+
+
+docker run -d --name meridian -p 8080:8080 --env-file .env meridian-ai
+docker ps
+docker logs meridian
+curl http://localhost:8080/api/health

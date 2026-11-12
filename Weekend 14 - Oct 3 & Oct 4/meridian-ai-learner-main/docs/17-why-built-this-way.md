@@ -86,7 +86,7 @@ The reasons behind the choices. Some are shortcuts made to keep a learning proje
 | `--max-instances 3` | Limits cost and abuse | Heavy traffic is limited |
 | `--allow-unauthenticated` **(shortcut)** | Anyone can open the demo | Add sign-in for real data |
 | Key in Secret Manager | Out of code, images and plain settings | One more service |
-| Access to *that one* secret only | Least privilege | – |
+| Secret access granted project-wide **(shortcut)** | The robot can set project IAM but not per-secret IAM | App can read every secret in the project |
 | Vector Search endpoint | Managed, fast, fits LangChain | **Hourly cost while deployed** |
 | Key file for the robot **(shortcut)** | Simplest to set up | Keys can leak; production uses keyless sign-in |
 | `editor` + `projectIamAdmin` **(shortcut)** | One robot can do everything | Far more access than needed |

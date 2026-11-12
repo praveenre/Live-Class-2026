@@ -6,6 +6,12 @@ on:
       - main
   workflow_dispatch:
 
+# One deploy at a time: a second run waits instead of racing the first.
+# Not cancelled mid-way, so a half-finished deploy (e.g. index creation) is never interrupted.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
@@ -152,6 +158,7 @@ jobs:
 
           if [ -z "$IS_DEPLOYED" ]; then
             echo "Triggering Index Deployment to Endpoint. (Async operation)..."
+            DEPLOY_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
             gcloud ai index-endpoints deploy-index $ENDPOINT_ID \
               --deployed-index-id=deployed_financial_docs \
               --display-name=financial-docs-deployed \
@@ -162,19 +169,31 @@ jobs:
             for attempt in $(seq 1 45); do
               # We check if the deployment is fully complete by looking for the index in the endpoint
               IS_DEPLOYED_NOW=$(gcloud ai index-endpoints describe $ENDPOINT_ID --region=${{ env.REGION }} --format="value(deployedIndexes.id)" 2>/dev/null | grep "deployed_financial_docs" || true)
-              
+
               if [ -n "$IS_DEPLOYED_NOW" ]; then
                 echo "Index deployment is complete and ACTIVE on the endpoint!"
                 break
               fi
-              
+
+              # Stop at once if Google reports that THIS deployment failed (for example "Not enough resources available").
+              # Without this check the loop would wait the full 45 minutes and the app would start without a search index.
+              OPS_JSON=$(curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+                "https://${{ env.REGION }}-aiplatform.googleapis.com/v1/$ENDPOINT_ID/operations?pageSize=5" || true)
+              # (python3 -c: look for a finished DeployIndex operation that has an error and started after this attempt began)
+              DEPLOY_ERROR=$(OPS_JSON="$OPS_JSON" python3 -c 'import json,os,sys; ops=json.loads(os.environ.get("OPS_JSON") or "{}").get("operations",[]); errs=[o["error"].get("message","the deployment failed") for o in ops if "DeployIndex" in o.get("metadata",{}).get("@type","") and o.get("done") and o.get("error") and o.get("metadata",{}).get("genericMetadata",{}).get("createTime","")>=sys.argv[1]]; print(errs[0] if errs else "")' "$DEPLOY_STARTED" 2>/dev/null || true)
+              if [ -n "$DEPLOY_ERROR" ]; then
+                echo "ERROR: Google could not deploy the index: $DEPLOY_ERROR"
+                echo "Nothing else is broken: the index and the endpoint exist. Run this workflow again later (it skips what exists and retries only the deployment)."
+                exit 1
+              fi
+
               echo "Attempt $attempt/45: Deployment in progress... waiting 60 seconds."
               sleep 60
             done
-            
+
             if [ -z "$IS_DEPLOYED_NOW" ]; then
-              echo "WARNING: Deployment timed out after 45 minutes. It may still be running."
-              # We don't exit 1 here because GCP might just be slow, and Cloud Run *might* still be able to start.
+              echo "ERROR: the index is still not deployed after 45 minutes. Check the endpoint in the console, then run this workflow again."
+              exit 1
             fi
           else
             echo "Index is already deployed."
@@ -196,6 +215,14 @@ jobs:
           # Passed as an environment variable (not pasted into the script text) so the key never appears in the shell command
           RAW_GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
+          # Editor can create secrets but never set their IAM policy (secretmanager.secrets.setIamPolicy).
+          # The deployer's projectIamAdmin role lets it grant itself Secret Manager Admin, which covers that.
+          echo "Granting Secret Manager Admin to the deployer service account..."
+          DEPLOYER_SA=$(gcloud config get account 2>/dev/null)
+          gcloud projects add-iam-policy-binding ${{ env.PROJECT_ID }} \
+            --member="serviceAccount:${DEPLOYER_SA}" \
+            --role="roles/secretmanager.admin" --condition=None >/dev/null
+
           # Create secret container if it doesn't exist
           if ! gcloud secrets describe GOOGLE_API_KEY >/dev/null 2>&1; then
             echo "Creating GOOGLE_API_KEY secret container..."
@@ -213,15 +240,43 @@ jobs:
           # Grant Cloud Run service account access to Secret Manager
           echo "Granting Secret Manager permissions to Cloud Run Service Account..."
           PROJECT_NUMBER=$(gcloud projects describe ${{ env.PROJECT_ID }} --format="value(projectNumber)")
-          # Least privilege: grant access to this one secret, not every secret in the project
-          gcloud secrets add-iam-policy-binding GOOGLE_API_KEY \
+          # Project-level binding: the deployer's projectIamAdmin role can set project IAM,
+          # but not the IAM policy on an individual secret. Note this grants access to all secrets in the project.
+          gcloud projects add-iam-policy-binding ${{ env.PROJECT_ID }} \
             --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-            --role="roles/secretmanager.secretAccessor" >/dev/null
+            --role="roles/secretmanager.secretAccessor" --condition=None >/dev/null
 
       # --- Phase 5: Build & Deploy Application ---
       - name: Build and Push Docker Image
         run: |
+          # Cloud Build runs as the default compute service account, which newer projects no longer
+          # make Editor automatically. Give it what a build needs: read the uploaded source, push the image, write logs.
+          echo "Granting Cloud Build permissions to the build service account..."
+          PROJECT_NUMBER=$(gcloud projects describe ${{ env.PROJECT_ID }} --format="value(projectNumber)")
+          gcloud projects add-iam-policy-binding ${{ env.PROJECT_ID }} \
+            --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+            --role="roles/cloudbuild.builds.builder" --condition=None >/dev/null
+
+          echo "Waiting 60 seconds for the IAM change to propagate..."
+          sleep 60
+
           gcloud builds submit --tag ${{ env.IMAGE_NAME }} .
+
+      - name: Grant Cloud Run Runtime Permissions
+        run: |
+          # The app runs as the default compute service account, which has no roles by default.
+          # Cloud mode needs Vertex AI (Vector Search index/endpoint, embeddings) and Cloud Storage (chunk text, uploads, logs).
+          PROJECT_NUMBER=$(gcloud projects describe ${{ env.PROJECT_ID }} --format="value(projectNumber)")
+
+          echo "Granting roles/aiplatform.user to the Cloud Run service account..."
+          gcloud projects add-iam-policy-binding ${{ env.PROJECT_ID }} \
+            --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+            --role="roles/aiplatform.user" --condition=None >/dev/null
+
+          echo "Granting roles/storage.objectAdmin to the Cloud Run service account..."
+          gcloud projects add-iam-policy-binding ${{ env.PROJECT_ID }} \
+            --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+            --role="roles/storage.objectAdmin" --condition=None >/dev/null
 
       - name: Deploy to Cloud Run
         run: |
