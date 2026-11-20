@@ -12,7 +12,7 @@ def test_health():
     assert client.get("/api/health").json() == {"status": "ok", "mode": "local"}
 
 
-def test_status_reports_local_mode_without_calling_gcp():
+def test_status_reports_local_mode():
     body = client.get("/api/status").json()
     assert body["mode"] == "local"
     assert body["vector_search"]["backend"] == "Chroma (local disk)"

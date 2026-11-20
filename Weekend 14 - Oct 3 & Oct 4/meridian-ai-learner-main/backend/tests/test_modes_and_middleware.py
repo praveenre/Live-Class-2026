@@ -42,11 +42,12 @@ def test_invalid_mode_is_rejected(monkeypatch):
         Settings(_env_file=None)
 
 
-def test_cloud_mode_lists_missing_settings(monkeypatch):
-    monkeypatch.setattr(settings, "app_mode", "cloud")
+def test_pinecone_mode_validates_settings(monkeypatch):
+    monkeypatch.setattr(settings, "vector_backend", "pinecone")
+    monkeypatch.setattr(settings, "pinecone_api_key", "")
     vector_store.get_vector_store.cache_clear()
     try:
-        with pytest.raises(ConfigurationError, match="VECTOR_SEARCH_INDEX_ID"):
+        with pytest.raises(ConfigurationError, match="PINECONE_API_KEY"):
             vector_store.get_vector_store()
     finally:
         vector_store.get_vector_store.cache_clear()
@@ -55,12 +56,13 @@ def test_cloud_mode_lists_missing_settings(monkeypatch):
 def test_missing_api_key_gives_503_not_500(monkeypatch):
     from rag import llm
 
+    monkeypatch.setattr(settings, "mesh_api_key", "")
     monkeypatch.setattr(settings, "GOOGLE_API_KEY", "")
     llm.get_llm.cache_clear()
     try:
         res = client.post("/api/rag/ask", json={"query": "hi"})
         assert res.status_code == 503
-        assert "GOOGLE_API_KEY" in res.json()["detail"]
+        assert "API_KEY" in res.json()["detail"]
     finally:
         llm.get_llm.cache_clear()
 

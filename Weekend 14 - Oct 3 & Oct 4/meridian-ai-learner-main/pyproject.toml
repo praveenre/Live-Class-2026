@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "langchain-openai>=1.8.2",
+    "langchain-pinecone>=0.2.13",
+]
 
 [tool.pyright]
 extraPaths = ["backend"]

@@ -1,18 +1,11 @@
 import os
-import atexit
 import logging
 from datetime import datetime
 import structlog
 
-from config.settings import settings
 
 def add_severity(logger, method_name, event_dict):
-    """Copy the log level into a field called "severity".
-
-    Cloud Logging (which collects Cloud Run's output) recognises "severity" in a JSON
-    log line and uses it to colour and filter entries. Our own "level" field is kept
-    too, so nothing that reads "level" breaks.
-    """
+    """Copy the log level into a field called 'severity' for JSON logs."""
     level = event_dict.get("level")
     if level:
         event_dict["severity"] = level.upper()
@@ -29,11 +22,6 @@ class CustomLogger:
         self._timestamp = datetime.now().strftime('%m_%d_%Y_%H_%M_%S')
         log_file = f"{self._timestamp}.log"
         self.log_file_path = os.path.join(self.logs_dir, log_file)
-
-        self._gcs_flushed = False
-
-        # Register atexit to auto-flush logs to GCS on shutdown
-        atexit.register(self.flush_to_gcs)
 
     def get_logger(self, name=__file__):
         logger_name = os.path.basename(name)
@@ -68,39 +56,3 @@ class CustomLogger:
         )
 
         return structlog.get_logger(logger_name)
-
-    def flush_to_gcs(self):
-        """Cloud mode only: upload the current log file to GCS. Safe to call multiple times."""
-        if self._gcs_flushed:
-            return
-
-        # Local mode: the log file in ./logs is enough, never touch Google Cloud
-        if not settings.is_cloud:
-            return
-
-        gcs_bucket = settings.GCS_BUCKET_NAME
-        gcp_project = settings.GCP_PROJECT
-
-        if not gcs_bucket:
-            print("[Logger] GCS_BUCKET_NAME not set — skipping GCS log upload.")
-            return
-
-        if not os.path.exists(self.log_file_path):
-            print("[Logger] Log file not found — skipping GCS log upload.")
-            return
-
-        try:
-            from google.cloud import storage  # only needed (and imported) in cloud mode
-
-            client = storage.Client(project=gcp_project or None)
-            bucket = client.bucket(gcs_bucket)
-            gcs_path = f"logs/{self._timestamp}.log"
-            blob = bucket.blob(gcs_path)
-            blob.upload_from_filename(self.log_file_path, content_type="text/plain")
-
-            self._gcs_flushed = True
-            print(f"[Logger] Logs uploaded to gs://{gcs_bucket}/{gcs_path}")
-        except Exception as e:
-            # Use print here intentionally — the structlog logger may not be
-            # available during shutdown, and we don't want to lose this error
-            print(f"[Logger] Failed to upload logs to GCS: {e}")

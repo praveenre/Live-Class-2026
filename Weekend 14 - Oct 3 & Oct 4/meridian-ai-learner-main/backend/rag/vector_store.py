@@ -1,13 +1,14 @@
-"""The vector database that stores our embeddings. Which one depends on APP_MODE.
+"""The vector database that stores our embeddings.
 
-    local  -> Chroma, a vector database that saves to a folder on your disk
-    cloud  -> Vertex AI Vector Search, Google's managed vector database
+    pinecone -> Pinecone Serverless vector database in the cloud
+    chroma   -> Chroma, an open-source vector database saved to disk (.meridian/chroma)
 
 Both are LangChain `VectorStore`s, so the rest of the code (ingestion, retrieval)
-calls the same methods (`add_documents`, `as_retriever`) and never knows which one it got.
+calls the same methods (`add_documents`, `similarity_search`, `as_retriever`).
 """
 from functools import lru_cache
 
+from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 
 from config.settings import settings
@@ -16,8 +17,37 @@ from logger import GLOBAL_LOGGER as log
 from rag.embeddings import get_embeddings
 
 
+class FloatEmbeddingsWrapper(Embeddings):
+    """Ensures all embedding values are pure Python floats for Pinecone's strict type validator."""
+
+    def __init__(self, base_embeddings: Embeddings):
+        self.base_embeddings = base_embeddings
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        embeddings = self.base_embeddings.embed_documents(texts)
+        return [[float(x) for x in vec] for vec in embeddings]
+
+    def embed_query(self, text: str) -> list[float]:
+        vec = self.base_embeddings.embed_query(text)
+        return [float(x) for x in vec]
+
+
+def _pinecone_store() -> VectorStore:
+    missing = settings.missing_pinecone_settings()
+    if missing:
+        raise ConfigurationError(f"Pinecone vector store selected, but these settings are empty: {', '.join(missing)}")
+
+    from langchain_pinecone import PineconeVectorStore
+    from pinecone import Pinecone
+
+    log.info("Using Pinecone vector store", index_name=settings.pinecone_index_name)
+    pc = Pinecone(api_key=settings.pinecone_api_key)
+    index = pc.Index(settings.pinecone_index_name)
+    return PineconeVectorStore(index=index, embedding=FloatEmbeddingsWrapper(get_embeddings()))
+
+
 def _local_store() -> VectorStore:
-    from langchain_chroma import Chroma  # imported here so cloud images do not need it loaded
+    from langchain_chroma import Chroma
 
     log.info("Using local Chroma vector store", path=settings.chroma_dir)
     return Chroma(
@@ -27,28 +57,9 @@ def _local_store() -> VectorStore:
     )
 
 
-def _cloud_store() -> VectorStore:
-    missing = settings.missing_cloud_settings()
-    if missing:
-        raise ConfigurationError(f"APP_MODE=cloud but these settings are empty: {', '.join(missing)}")
-
-    from google.cloud import aiplatform
-    from langchain_google_vertexai import VectorSearchVectorStore
-
-    log.info("Using Vertex AI Vector Search", index_id=settings.vector_search_index_id)
-    aiplatform.init(project=settings.GCP_PROJECT, location=settings.GCP_REGION)
-    return VectorSearchVectorStore.from_components(
-        project_id=settings.GCP_PROJECT,
-        region=settings.GCP_REGION,
-        embedding=get_embeddings(),  # NOTE: singular "embedding", not "embeddings"
-        index_id=settings.vector_search_index_id,
-        endpoint_id=settings.vector_search_index_endpoint_id,
-        gcs_bucket_name=settings.GCS_BUCKET_NAME,
-        stream_update=True,
-    )
-
-
 @lru_cache(maxsize=1)
 def get_vector_store() -> VectorStore:
-    """Connect on first use, so the API can start (e.g. /api/health) before anything is configured."""
-    return _cloud_store() if settings.is_cloud else _local_store()
+    """Connect on first use, so the API can start before anything is configured."""
+    if settings.is_pinecone:
+        return _pinecone_store()
+    return _local_store()

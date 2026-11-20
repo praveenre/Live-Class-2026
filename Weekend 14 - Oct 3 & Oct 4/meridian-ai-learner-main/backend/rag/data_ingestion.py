@@ -4,8 +4,7 @@
 
 Two entry points share the same steps:
   * ingest_pdf()          - one PDF on disk (used by the upload endpoint)
-  * ingest_stored_pdfs()  - every PDF in the document store
-                            (local: .meridian/uploads/, cloud: the GCS bucket)
+  * ingest_stored_pdfs()  - every PDF in the document store (.meridian/uploads/)
 """
 import hashlib
 
@@ -48,14 +47,20 @@ def ingest_pdf(local_path: str, source: str) -> dict:
 
     chunks = split_into_chunks(pages)
     if chunks:
-        log.info("Embedding chunks and adding to vector store", source=source, chunks=len(chunks))
-        ids = [_chunk_id(c, i) for i, c in enumerate(chunks)]
-        get_vector_store().add_documents(chunks, ids=ids)
+        get_vector_store().add_documents(
+            documents=chunks,
+            ids=[_chunk_id(chunk, i) for i, chunk in enumerate(chunks)],
+        )
+
+    log.info("ingest.complete", source=source, pages=len(pages), chunks=len(chunks))
     return {"pages": len(pages), "chunks": len(chunks)}
 
 
 def ingest_stored_pdfs() -> dict:
-    """Index every PDF already in the document store."""
+    """Read and index every PDF that is already in the document store.
+
+    Called when the user clicks 'Index stored documents' in the UI.
+    """
     log.info("Indexing stored documents", location=document_store.location())
     totals = {"files": 0, "pages": 0, "chunks": 0}
 

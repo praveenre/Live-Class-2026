@@ -1,4 +1,4 @@
-"""Test setup: fake config so the tests run without Google Cloud, a Gemini key or the internet."""
+"""Test setup: fake config so the tests run offline without external services."""
 import os
 import sys
 import tempfile
@@ -10,10 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ["APP_MODE"] = "local"
 os.environ["LOCAL_DATA_DIR"] = tempfile.mkdtemp(prefix="meridian-test-")
 os.environ["GOOGLE_API_KEY"] = "test-key"
-os.environ["GCP_PROJECT_ID"] = "test-project"
-os.environ["GCP_REGION"] = "us-central1"
-# Empty on purpose: nothing may try to reach Cloud Storage
-os.environ["GCS_BUCKET_NAME"] = ""
-os.environ["GCS_PREFIX"] = "uploads/"
-os.environ["VECTOR_SEARCH_INDEX_ID"] = ""
-os.environ["VECTOR_SEARCH_INDEX_ENDPOINT_ID"] = ""
+os.environ["VECTOR_BACKEND"] = "chroma"
+os.environ["PINECONE_API_KEY"] = ""
+os.environ["PINECONE_INDEX_NAME"] = ""
+os.environ["MESH_API_KEY"] = ""
