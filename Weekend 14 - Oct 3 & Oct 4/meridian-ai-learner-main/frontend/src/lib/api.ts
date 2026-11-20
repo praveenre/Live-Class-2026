@@ -41,7 +41,7 @@ export async function askQuestion(query: string, retrieverType: string = "simila
   });
 }
 
-/** Index every PDF in the document store: local folder (APP_MODE=local) or GCS bucket (APP_MODE=cloud). */
+/** Index every PDF in the document store (.meridian/uploads/). */
 export async function triggerStoreIngestion() {
   return request<{ status: string; files: number; pages: number; chunks: number }>("/api/rag/ingest", { method: "POST" });
 }
@@ -72,9 +72,8 @@ export type AppMode = "local" | "cloud";
 export interface SystemStatus {
   mode?: AppMode;
   backend?: { status: string; uptime: string; python_version: string; platform: string };
-  gcp?: { project_id: string; region: string };
-  storage?: { location: string; gcs_bucket: string; gcs_prefix: string };
-  vector_search?: { backend: string; index_id: string; endpoint_id: string; stream_update: boolean };
+  storage?: { location: string };
+  vector_search?: { backend: string; index_id: string; endpoint_id: string; dimension?: number };
   models?: { embedding: string; llm: string; llm_framework: string };
   ingestion?: { uploads_this_session: number };
 }

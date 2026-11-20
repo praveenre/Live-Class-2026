@@ -1,4 +1,4 @@
-"""Smoke tests: the API starts and its routes work WITHOUT Google Cloud (everything external is faked)."""
+"""Smoke tests: the API starts and its routes work offline (everything external is faked)."""
 from fastapi.testclient import TestClient
 from langchain_core.documents import Document
 
@@ -57,7 +57,7 @@ def test_chunking_splits_long_text_and_keeps_metadata():
 
 
 def test_sample_pdfs_load_and_chunk():
-    """The demo PDFs in sample_docs/ can be read and split (no Google Cloud needed)."""
+    """The demo PDFs in sample_docs/ can be read and split offline."""
     import glob
     import os
 

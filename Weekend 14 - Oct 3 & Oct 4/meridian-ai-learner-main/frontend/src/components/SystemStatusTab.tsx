@@ -104,21 +104,14 @@ export default function SystemStatusTab() {
           <StatusRow label="Platform" value={s.backend?.platform} />
         </StatusSection>
 
-        <StatusSection title="Google Cloud Platform" icon="☁️">
-          <StatusRow label="Project ID" value={s.gcp?.project_id} mono />
-          <StatusRow label="Region" value={s.gcp?.region} mono />
-        </StatusSection>
-
-        <StatusSection title={s.mode === "cloud" ? "Cloud Storage (GCS)" : "Document Store (local)"} icon="🗂️">
+        <StatusSection title="Document Store" icon="🗂️">
           <StatusRow label="Location" value={s.storage?.location} mono />
-          <StatusRow label="Bucket" value={s.storage?.gcs_bucket} mono />
-          <StatusRow label="Prefix" value={s.storage?.gcs_prefix} mono />
         </StatusSection>
 
         <StatusSection title={s.vector_search?.backend ?? "Vector Store"} icon="🔍">
-          <StatusRow label={s.mode === "cloud" ? "Index ID" : "Path"} value={s.mode === "cloud" ? shortId(s.vector_search?.index_id) : s.vector_search?.index_id} mono />
-          <StatusRow label="Endpoint ID" value={shortId(s.vector_search?.endpoint_id)} mono />
-          <StatusRow label="Stream Update" value={s.vector_search?.stream_update ? "Enabled" : "Disabled"} tag={s.vector_search?.stream_update ? "ok" : "warn"} />
+          <StatusRow label="Index" value={shortId(s.vector_search?.index_id)} mono />
+          <StatusRow label="Endpoint" value={shortId(s.vector_search?.endpoint_id)} mono />
+          <StatusRow label="Dimension" value={s.vector_search?.dimension ? String(s.vector_search.dimension) : "768"} mono />
         </StatusSection>
 
         <StatusSection title="AI Models" icon="🤖">

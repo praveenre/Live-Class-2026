@@ -39,10 +39,10 @@ export default function DocumentUploadTab() {
   const [activeTab, setActiveTab] = useState<IngestionTab>("local");
   const [dragActive, setDragActive] = useState(false);
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
-  const [gcsLoading, setGcsLoading] = useState(false);
-  const [gcsResult, setGcsResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  // APP_MODE comes from the backend: decides whether "stored documents" means a local folder or GCS
+  // APP_MODE comes from the backend
   const [status, setStatus] = useState<SystemStatus | null>(null);
   useEffect(() => {
     getSystemStatus().then(setStatus).catch(() => setStatus(null));
@@ -112,16 +112,16 @@ export default function DocumentUploadTab() {
     addFiles(e.dataTransfer.files);
   };
 
-  const handleGCSIngest = async () => {
-    setGcsLoading(true);
-    setGcsResult(null);
+  const handleStoreIngest = async () => {
+    setSyncLoading(true);
+    setSyncResult(null);
     try {
       const data = await triggerStoreIngestion();
-      setGcsResult({ ok: true, message: data.status });
+      setSyncResult({ ok: true, message: data.status });
     } catch (err: any) {
-      setGcsResult({ ok: false, message: err.message });
+      setSyncResult({ ok: false, message: err.message });
     } finally {
-      setGcsLoading(false);
+      setSyncLoading(false);
     }
   };
 
@@ -308,12 +308,10 @@ export default function DocumentUploadTab() {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold font-heading text-card-foreground">
-                      {isCloud ? "Cloud Sync" : "Local Sync"}
+                      Stored Documents Repository
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1 max-w-lg">
-                      {isCloud
-                        ? "Synchronize the vector index with documents already in the GCS bucket."
-                        : "Re-index every PDF already saved in the local uploads folder."}
+                      Synchronize the vector index with documents stored in the upload repository (.meridian/uploads/).
                     </p>
                   </div>
                 </div>
@@ -337,27 +335,27 @@ export default function DocumentUploadTab() {
 
                 <button
                   className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl text-sm font-bold transition-all shadow-lg
-                    ${gcsLoading 
+                    ${syncLoading 
                       ? "bg-secondary text-secondary-foreground cursor-not-allowed opacity-80" 
                       : "bg-secondary text-secondary-foreground hover:bg-secondary/80 hover:scale-[1.01] active:scale-[0.99] shadow-secondary/10"}`}
-                  disabled={gcsLoading}
-                  onClick={handleGCSIngest}
+                  disabled={syncLoading}
+                  onClick={handleStoreIngest}
                 >
-                  {gcsLoading ? (
+                  {syncLoading ? (
                     <><Loader2 className="w-5 h-5 animate-spin" /> Synchronizing Repository…</>
                   ) : (
-                    <><HardDrive className="w-5 h-5" /> {isCloud ? "Start GCS Ingestion" : "Index Stored Documents"}</>
+                    <><HardDrive className="w-5 h-5" /> Index Stored Documents</>
                   )}
                 </button>
 
-                {gcsResult && (
+                {syncResult && (
                   <div className={`mt-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-3 animate-in fade-in zoom-in-95
-                    ${gcsResult.ok ? "bg-success/10 border border-success/30 text-success" : "bg-destructive/10 border border-destructive/30 text-destructive"}`}>
+                    ${syncResult.ok ? "bg-success/10 border border-success/30 text-success" : "bg-destructive/10 border border-destructive/30 text-destructive"}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 
-                      ${gcsResult.ok ? "bg-success/20" : "bg-destructive/20"}`}>
-                      {gcsResult.ok ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5 text-destructive" />}
+                      ${syncResult.ok ? "bg-success/20" : "bg-destructive/20"}`}>
+                      {syncResult.ok ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5 text-destructive" />}
                     </div>
-                    {gcsResult.message}
+                    {syncResult.message}
                   </div>
                 )}
               </div>

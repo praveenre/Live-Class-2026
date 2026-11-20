@@ -1,6 +1,6 @@
 # Examples
 
-Six small programs that each show **one idea**. **None needs a Google Cloud account or an API key.** Run them from this folder after installing the requirements (`pip install -r requirements.txt` in the main folder, with `.venv` active).
+Six small programs that each show **one idea**. **None needs an external account or an API key.** Run them from this folder after installing the requirements (`pip install -r requirements.txt` in the main folder, with `.venv` active).
 
 | File | The idea | Read about it in |
 |---|---|---|
